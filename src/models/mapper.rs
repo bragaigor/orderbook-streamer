@@ -1,7 +1,7 @@
 use serde::de;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OfferData {
     /// Price level to be updated
     #[serde(deserialize_with = "de_float_from_str")]
