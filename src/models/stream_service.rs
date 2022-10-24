@@ -54,6 +54,7 @@ impl StreamService {
         }));
 
         // TODO: Should we spin another Tokio task here?
+        //       - Probably yes since we also need to start the gRPC server
         self.listen().await?;
 
         // Wait for all

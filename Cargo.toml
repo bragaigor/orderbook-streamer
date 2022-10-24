@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.20.0", features = ["full"] }
+tokio-stream = "0.1.11"
 dotenv = "0.15.0"
 log = "0.4.11"
 anyhow = "1.0.33"
@@ -18,3 +19,10 @@ url = "2.2.2"
 tokio-tungstenite = { version = "0.17.2", features = ["native-tls"]}
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 futures        = "0.3.21"
+clap = { version = "4.0.18", features = ["derive"] }
+prost = "0.11.0"
+tonic = "0.8.2"
+protoc = "2.28.0"
+
+[build-dependencies]
+tonic-build = "0.8.2"
