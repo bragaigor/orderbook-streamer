@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status};
 
-use crate::models::messages::CryptoMessage;
+use crate::models::messages::OrderbookMessage;
 use crate::models::stream_service::StreamService;
 
 pub mod orderbook {
@@ -15,20 +15,21 @@ pub mod orderbook {
 }
 
 #[derive(Debug)]
-pub struct CryptService {
-    pub chan_recv: Arc<Mutex<Receiver<CryptoMessage>>>,
+pub struct OrderbookService {
+    pub chan_recv: Arc<Mutex<Receiver<OrderbookMessage>>>,
 }
 
 pub type ResultSummary = Result<Summary, Status>;
 
 #[tonic::async_trait]
-impl OrderbookAggregator for CryptService {
+impl OrderbookAggregator for OrderbookService {
     type BookSummaryStream = ReceiverStream<ResultSummary>;
 
     async fn book_summary(
         &self,
         _empty: Request<Empty>,
     ) -> Result<Response<Self::BookSummaryStream>, Status> {
+        // TODO: Make the channel buffer limit here dynamic and larger
         let (tx, rx) = channel(4);
 
         // TODO: The problem with this implementation is that we can only have one client listening
@@ -51,7 +52,7 @@ pub async fn serve(symbol: Option<String>) -> Result<(), Box<dyn std::error::Err
     // defining address for our service
     let addr = "[::1]:8080".parse().unwrap();
     // creating a service
-    let crypt = CryptService {
+    let crypt = OrderbookService {
         chan_recv: Arc::new(Mutex::new(chan_recv)),
     };
 

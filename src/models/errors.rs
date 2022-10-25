@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum CryptError {
+pub enum OrderbookError {
     #[error("missing domain cache for domain {on_domain:?}")]
     DomainCacheLookup { on_domain: String },
 

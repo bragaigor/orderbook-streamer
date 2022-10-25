@@ -5,7 +5,7 @@ use super::mapper::OfferData;
 ///
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "lowercase")]
-pub enum CryptoMessage {
+pub enum OrderbookMessage {
     ///
     BinanceMessage {
         /// Generic Stats metric

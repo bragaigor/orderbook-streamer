@@ -11,8 +11,8 @@ use crate::server::grpc_server::{self, ResultSummary};
 
 use super::{
     consts::CHANNEL_BUFFER_LIMIT,
-    errors::CryptError,
-    messages::CryptoMessage,
+    errors::OrderbookError,
+    messages::OrderbookMessage,
     stream::{binance_data_listen, bitstamp_data_listen},
 };
 
@@ -23,9 +23,9 @@ pub mod orderbook {
 pub struct StreamService {
     pub symbol: String,
     /// Private sender that sends message to channel
-    chan_send: Sender<CryptoMessage>,
+    chan_send: Sender<OrderbookMessage>,
     /// Private reciever that gets the messages sent by send
-    chan_recv: Receiver<CryptoMessage>,
+    chan_recv: Receiver<OrderbookMessage>,
 }
 
 impl StreamService {
@@ -40,7 +40,7 @@ impl StreamService {
     }
 
     fn init_service(symbol: String) -> StreamService {
-        let (chan_send, chan_recv) = channel::<CryptoMessage>(CHANNEL_BUFFER_LIMIT);
+        let (chan_send, chan_recv) = channel::<OrderbookMessage>(CHANNEL_BUFFER_LIMIT);
         StreamService {
             symbol,
             chan_send,
@@ -48,7 +48,7 @@ impl StreamService {
         }
     }
 
-    pub async fn run(self) -> Result<Receiver<CryptoMessage>> {
+    pub async fn run(self) -> Result<Receiver<OrderbookMessage>> {
         let mut tasks = vec![];
 
         let cloned_symbol = self.symbol.clone();
@@ -77,7 +77,7 @@ impl StreamService {
 
     /// Receiver loop. Always listens and waits for messages and call handle_message to process messages accordingly
     pub async fn mpsc_handle(
-        chan_recv: Arc<Mutex<Receiver<CryptoMessage>>>,
+        chan_recv: Arc<Mutex<Receiver<OrderbookMessage>>>,
         chan_send: Sender<ResultSummary>,
     ) -> Result<()> {
         let mut recv = chan_recv.lock().await;
@@ -99,9 +99,9 @@ impl StreamService {
         Ok(())
     }
 
-    async fn handle_message(msg: &CryptoMessage) -> Result<Summary, CryptError> {
+    async fn handle_message(msg: &OrderbookMessage) -> Result<Summary, OrderbookError> {
         let (asks, bids) = match msg {
-            CryptoMessage::BinanceMessage { message } => {
+            OrderbookMessage::BinanceMessage { message } => {
                 let asklen = message.asks.len();
                 let bidlen = message.bids.len();
                 println!(
@@ -111,7 +111,7 @@ impl StreamService {
 
                 (message.asks.clone(), message.bids.clone())
             }
-            CryptoMessage::BitstampMessage { message } => {
+            OrderbookMessage::BitstampMessage { message } => {
                 let asklen = message.asks.len();
                 let bidlen = message.bids.len();
                 println!(

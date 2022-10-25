@@ -10,10 +10,13 @@ use crate::models::{
     mapper::{BinanceStreamData, BitstampData},
 };
 
-use super::messages::{BidsAsks, CryptoMessage};
+use super::messages::{BidsAsks, OrderbookMessage};
 
 /// Binance streamer
-pub async fn binance_data_listen(symbol: String, chan_send: Sender<CryptoMessage>) -> Result<()> {
+pub async fn binance_data_listen(
+    symbol: String,
+    chan_send: Sender<OrderbookMessage>,
+) -> Result<()> {
     let url = format!("{}/ws/{}@depth20@100ms", BINANCE_WS_API, &symbol);
     println!("going to listen URL: {}", &url);
     let url = Url::parse(&url).expect("Bad URL!! AAAAH");
@@ -41,9 +44,9 @@ pub async fn binance_data_listen(symbol: String, chan_send: Sender<CryptoMessage
 /// Helper to send binance data to mpsc channel
 async fn send_binance_data(
     data: BinanceStreamData,
-    chan_send: &Sender<CryptoMessage>,
+    chan_send: &Sender<OrderbookMessage>,
 ) -> Result<()> {
-    let message = CryptoMessage::BinanceMessage {
+    let message = OrderbookMessage::BinanceMessage {
         message: Box::new(BidsAsks {
             asks: data.asks,
             bids: data.bids,
@@ -58,7 +61,10 @@ async fn send_binance_data(
 }
 
 /// Bitstamp streamer
-pub async fn bitstamp_data_listen(symbol: String, chan_send: Sender<CryptoMessage>) -> Result<()> {
+pub async fn bitstamp_data_listen(
+    symbol: String,
+    chan_send: Sender<OrderbookMessage>,
+) -> Result<()> {
     println!("going to listen URL: {}", BITSTAMP_WS_API);
     let url = Url::parse(BITSTAMP_WS_API).expect("Bad URL!! AAAAH");
     let (mut ws_stream, _) = connect_async(url).await?;
@@ -106,8 +112,11 @@ pub async fn bitstamp_data_listen(symbol: String, chan_send: Sender<CryptoMessag
 }
 
 /// Helper to send binance data to mpsc channel
-async fn send_bitstamp_data(data: BitstampData, chan_send: &Sender<CryptoMessage>) -> Result<()> {
-    let message = CryptoMessage::BitstampMessage {
+async fn send_bitstamp_data(
+    data: BitstampData,
+    chan_send: &Sender<OrderbookMessage>,
+) -> Result<()> {
+    let message = OrderbookMessage::BitstampMessage {
         message: Box::new(BidsAsks {
             asks: data.data.asks.unwrap(),
             bids: data.data.bids.unwrap(),

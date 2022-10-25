@@ -1,8 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use crypto_streamer::{
-    client::grpc_client, models::stream_service::StreamService, server::grpc_server,
-};
+use crypto_streamer::{client::grpc_client, server::grpc_server};
 
 // Command line argument processing config.
 #[derive(Parser)]
@@ -37,7 +35,7 @@ pub(crate) struct ClientArgs {}
 async fn main() -> Result<()> {
     stackdriver_logger::init_with(
         Some(stackdriver_logger::Service {
-            name: "CryptoStream".to_owned(),
+            name: "OrderbookStream".to_owned(),
             version: "1.0".to_owned(),
         }),
         true,
