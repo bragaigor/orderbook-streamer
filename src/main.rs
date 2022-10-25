@@ -1,6 +1,8 @@
 use anyhow::Result;
 use clap::Parser;
-use crypto_streamer::{models::stream_service::StreamService, server::grpc_server};
+use crypto_streamer::{
+    client::grpc_client, models::stream_service::StreamService, server::grpc_server,
+};
 
 // Command line argument processing config.
 #[derive(Parser)]
@@ -45,16 +47,13 @@ async fn main() -> Result<()> {
 
     match opts.subcmd {
         SubCommand::Server(args) => {
-            let mut service = StreamService::new(args.symbol);
-            service.run().await?;
-
-            // TODO: Above service.run().await?; should be called from withing the gRPC server!
-            grpc_server::serve()
+            grpc_server::serve(args.symbol)
                 .await
                 .expect("Failed to run gRPC server");
         }
         SubCommand::Client(_args) => {
             // TODO: Call gRPC client. Mostly used to test
+            grpc_client::listen().await?;
         }
     }
 

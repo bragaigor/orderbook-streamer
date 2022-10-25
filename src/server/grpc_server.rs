@@ -1,54 +1,60 @@
+use std::sync::Arc;
+
 use orderbook::orderbook_aggregator_server::{OrderbookAggregator, OrderbookAggregatorServer};
 use orderbook::{Empty, Summary};
-use tokio::sync::mpsc::channel;
+use tokio::sync::mpsc::{channel, Receiver};
+use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status};
+
+use crate::models::messages::CryptoMessage;
+use crate::models::stream_service::StreamService;
 
 pub mod orderbook {
     tonic::include_proto!("orderbook");
 }
 
-#[derive(Debug, Default)]
-pub struct CryptService {}
+#[derive(Debug)]
+pub struct CryptService {
+    pub chan_recv: Arc<Mutex<Receiver<CryptoMessage>>>,
+}
+
+pub type ResultSummary = Result<Summary, Status>;
 
 #[tonic::async_trait]
 impl OrderbookAggregator for CryptService {
-    type BookSummaryStream = ReceiverStream<Result<Summary, Status>>;
+    type BookSummaryStream = ReceiverStream<ResultSummary>;
 
     async fn book_summary(
         &self,
-        empty: Request<Empty>,
+        _empty: Request<Empty>,
     ) -> Result<Response<Self::BookSummaryStream>, Status> {
         let (tx, rx) = channel(4);
 
-        tokio::spawn(async move {
-            for i in 0..10 {
-                let summary = Summary {
-                    spread: i as f64,
-                    bids: vec![],
-                    asks: vec![],
-                };
-                tx.send(Ok(summary)).await.unwrap();
-            }
+        // TODO: The problem with this implementation is that we can only have one client listening
+        //       to the gRPC server at a time, and that's because we're using mpsc channel, which
+        //       means we only have one receiver for many servers. To fix this we would have to update
+        //       the Server to use broadcast instead.
+        let chan_recv_cloned = self.chan_recv.clone();
+        tokio::spawn(async move { StreamService::mpsc_handle(chan_recv_cloned, tx.clone()).await });
 
-            println!(" /// done sending");
-        });
-
-        // let summary = Summary {
-        //     spread: 10.0,
-        //     bids: vec![],
-        //     asks: vec![]
-        // };
+        println!("DONE with book_summary!!!");
 
         Ok(Response::new(ReceiverStream::new(rx)))
     }
 }
 
-pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn serve(symbol: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let service = StreamService::new(symbol);
+    let chan_recv = service.run().await?;
+
     // defining address for our service
     let addr = "[::1]:8080".parse().unwrap();
     // creating a service
-    let crypt = CryptService::default();
+    let crypt = CryptService {
+        chan_recv: Arc::new(Mutex::new(chan_recv)),
+    };
+
     println!("Server listening on {}", addr);
     // adding our service to our server.
     Server::builder()

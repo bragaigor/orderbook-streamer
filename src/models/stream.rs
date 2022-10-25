@@ -1,10 +1,8 @@
+use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use tokio::sync::mpsc::Sender;
-use tokio_tungstenite::{
-    connect_async,
-    tungstenite::{Message, Result},
-};
+use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
 
 use crate::models::{
