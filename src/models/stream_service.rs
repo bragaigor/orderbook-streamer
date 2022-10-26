@@ -1,10 +1,8 @@
-use std::sync::Arc;
-
 use anyhow::Result;
 use grpc_server::orderbook::{Level, Summary};
 use tokio::sync::{
-    mpsc::{channel, Receiver, Sender},
-    Mutex,
+    broadcast::{self, Receiver, Sender},
+    mpsc,
 };
 
 use crate::server::grpc_server::{self, ResultSummary};
@@ -39,8 +37,9 @@ impl StreamService {
         StreamService::init_service(symbol)
     }
 
+    /// Initializes the service that spawns orderbook threads
     fn init_service(symbol: String) -> StreamService {
-        let (chan_send, chan_recv) = channel::<OrderbookMessage>(CHANNEL_BUFFER_LIMIT);
+        let (chan_send, chan_recv) = broadcast::channel::<OrderbookMessage>(CHANNEL_BUFFER_LIMIT);
         StreamService {
             symbol,
             chan_send,
@@ -48,7 +47,7 @@ impl StreamService {
         }
     }
 
-    pub async fn run(self) -> Result<Receiver<OrderbookMessage>> {
+    pub async fn run(self) -> Result<Sender<OrderbookMessage>> {
         let mut tasks = vec![];
 
         let cloned_symbol = self.symbol.clone();
@@ -72,18 +71,19 @@ impl StreamService {
         //     res??;
         // }
 
-        Ok(self.chan_recv)
+        Ok(self.chan_send)
     }
 
     /// Receiver loop. Always listens and waits for messages and call handle_message to process messages accordingly
     pub async fn mpsc_handle(
-        chan_recv: Arc<Mutex<Receiver<OrderbookMessage>>>,
-        chan_send: Sender<ResultSummary>,
+        mut chan_recv: Receiver<OrderbookMessage>,
+        chan_send: mpsc::Sender<ResultSummary>,
     ) -> Result<()> {
-        let mut recv = chan_recv.lock().await;
+        // let mut recv = chan_recv.lock().await;
         // Wait for messages and then process them
+
         loop {
-            if let Some(msg) = recv.recv().await {
+            if let Ok(msg) = chan_recv.recv().await {
                 let summary = StreamService::handle_message(&msg).await?;
 
                 // TODO: Merge and sort asks and bids. Should we use an internal cache or should we sort each order book as they come?
@@ -104,9 +104,10 @@ impl StreamService {
             OrderbookMessage::BinanceMessage { message } => {
                 let asklen = message.asks.len();
                 let bidlen = message.bids.len();
-                println!(
+                log::warn!(
                     "Received message for Binance with {} asks and {} bids",
-                    asklen, bidlen
+                    asklen,
+                    bidlen
                 );
 
                 (message.asks.clone(), message.bids.clone())
@@ -114,9 +115,10 @@ impl StreamService {
             OrderbookMessage::BitstampMessage { message } => {
                 let asklen = message.asks.len();
                 let bidlen = message.bids.len();
-                println!(
+                log::warn!(
                     "Received message for Bitstamp with {} asks and {} bids",
-                    asklen, bidlen
+                    asklen,
+                    bidlen
                 );
 
                 (message.asks.clone(), message.bids.clone())

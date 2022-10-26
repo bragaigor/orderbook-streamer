@@ -15,8 +15,8 @@ pub async fn listen() -> Result<()> {
 
     let mut stream = client.book_summary(empty).await?.into_inner();
 
-    while let Some(feature) = stream.message().await? {
-        println!("CLIENT: message from server = {:?}", feature);
+    while let Some(summary) = stream.message().await? {
+        log::info!("CLIENT: message from server = {:?}", summary);
     }
 
     Ok(())

@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
 use orderbook::orderbook_aggregator_server::{OrderbookAggregator, OrderbookAggregatorServer};
 use orderbook::{Empty, Summary};
-use tokio::sync::mpsc::{channel, Receiver};
-use tokio::sync::Mutex;
+use tokio::sync::broadcast::Sender;
+use tokio::sync::mpsc::channel;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status};
 
@@ -16,7 +14,7 @@ pub mod orderbook {
 
 #[derive(Debug)]
 pub struct OrderbookService {
-    pub chan_recv: Arc<Mutex<Receiver<OrderbookMessage>>>,
+    pub chan_send: Sender<OrderbookMessage>,
 }
 
 pub type ResultSummary = Result<Summary, Status>;
@@ -32,14 +30,10 @@ impl OrderbookAggregator for OrderbookService {
         // TODO: Make the channel buffer limit here dynamic and larger
         let (tx, rx) = channel(4);
 
-        // TODO: The problem with this implementation is that we can only have one client listening
-        //       to the gRPC server at a time, and that's because we're using mpsc channel, which
-        //       means we only have one receiver for many servers. To fix this we would have to update
-        //       the Server to use broadcast instead.
-        let chan_recv_cloned = self.chan_recv.clone();
-        tokio::spawn(async move { StreamService::mpsc_handle(chan_recv_cloned, tx.clone()).await });
-
-        println!("DONE with book_summary!!!");
+        // The nice thing about this implementation is that we can have n numbers of clients listening to
+        // the same server since we're using multi-producer, multi-consumer broadcast queue
+        let chan_recv = self.chan_send.subscribe();
+        tokio::spawn(async move { StreamService::mpsc_handle(chan_recv, tx.clone()).await });
 
         Ok(Response::new(ReceiverStream::new(rx)))
     }
@@ -47,19 +41,17 @@ impl OrderbookAggregator for OrderbookService {
 
 pub async fn serve(symbol: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     let service = StreamService::new(symbol);
-    let chan_recv = service.run().await?;
+    let chan_send = service.run().await?;
 
-    // defining address for our service
+    // Defining address for our service.
     let addr = "[::1]:8080".parse().unwrap();
-    // creating a service
-    let crypt = OrderbookService {
-        chan_recv: Arc::new(Mutex::new(chan_recv)),
-    };
+    // Create an orderbook service instance.
+    let orderbook = OrderbookService { chan_send };
 
-    println!("Server listening on {}", addr);
-    // adding our service to our server.
+    log::info!("Server listening on {}", addr);
+    // Add orderbook service to the server.
     Server::builder()
-        .add_service(OrderbookAggregatorServer::new(crypt))
+        .add_service(OrderbookAggregatorServer::new(orderbook))
         .serve(addr)
         .await?;
     Ok(())

@@ -1,26 +1,36 @@
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::broadcast::Sender;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
 
 use crate::models::{
-    consts::{BINANCE_WS_API, BITSTAMP_WS_API},
+    consts::{
+        BINANCE_WS_API, BITSTAMP_WS_API, DEPTH_LEVEL_BINANCE, ERR_COUNT_LOG, UPDATE_SPEED_BINANCE,
+    },
     mapper::{BinanceStreamData, BitstampData},
 };
 
 use super::messages::{BidsAsks, OrderbookMessage};
 
 /// Binance streamer
+/// 1. Connects to the Binance Web Socket which already contains the orderbook that we want to subscribe to
+/// 2. Indefinitely listens for bitstamp orderbooks
+/// 2.1 For each orderbook received it sends over the broadcast channel to be agregated and ordered by our server
 pub async fn binance_data_listen(
     symbol: String,
     chan_send: Sender<OrderbookMessage>,
 ) -> Result<()> {
-    let url = format!("{}/ws/{}@depth20@100ms", BINANCE_WS_API, &symbol);
-    println!("going to listen URL: {}", &url);
-    let url = Url::parse(&url).expect("Bad URL!! AAAAH");
+    let url = format!(
+        "{}/ws/{}@{}@{}",
+        BINANCE_WS_API, &symbol, DEPTH_LEVEL_BINANCE, UPDATE_SPEED_BINANCE
+    );
+    log::info!("Listening for Binance orderbooks at: {}", &url);
+    let url = Url::parse(&url).expect("Bad Binance URL!");
     let (mut ws_stream, _) = connect_async(url).await?;
+
+    let mut err_count = 0;
 
     while let Some(msg) = ws_stream.next().await {
         let msg = msg?;
@@ -29,13 +39,18 @@ pub async fn binance_data_listen(
 
         let parsed: BinanceStreamData =
             serde_json::from_str(&msg_str).expect("Can't parse binance data");
-        // TODO: Do something with the data
-        // println!("Got Binance message: {:#?}", parsed);
 
-        send_binance_data(parsed, &chan_send).await?;
+        if let Err(_) = send_binance_data(parsed, &chan_send).await {
+            err_count += 1;
+        }
+
+        if err_count > ERR_COUNT_LOG {
+            log::error!("Failed to send 50 binance orderbooks. No receivers found.");
+            err_count = 0;
+        }
     }
 
-    // TODO: Make it more dynamic since this is unreachable code at the moment
+    // Unreachable code but we like to do the right thing and close the stream eventually :)
     ws_stream.close(None).await?;
 
     Ok(())
@@ -53,20 +68,22 @@ async fn send_binance_data(
         }),
     };
 
-    if let Err(error) = chan_send.try_send(message) {
-        log::error!("Failed trying to send Binance message: {:?}", error);
-    }
+    chan_send.send(message)?;
 
     Ok(())
 }
 
-/// Bitstamp streamer
+/// Bitstamp streamer.
+/// 1. Connects to the bitstamp Web Socket
+/// 2. Subscribes to an orderbook
+/// 3. Indefinitely listens for bitstamp orderbooks
+/// 3.1 For each orderbook received it sends over the broadcast channel to be agregated and ordered by our server
 pub async fn bitstamp_data_listen(
     symbol: String,
     chan_send: Sender<OrderbookMessage>,
 ) -> Result<()> {
-    println!("going to listen URL: {}", BITSTAMP_WS_API);
-    let url = Url::parse(BITSTAMP_WS_API).expect("Bad URL!! AAAAH");
+    log::info!("Listening for Bitstamp orderbooks at: {}", BITSTAMP_WS_API);
+    let url = Url::parse(BITSTAMP_WS_API).expect("Bad Bitstamp URL!");
     let (mut ws_stream, _) = connect_async(url).await?;
 
     let order_book = format!("order_book_{}", &symbol);
@@ -81,6 +98,8 @@ pub async fn bitstamp_data_listen(
     let message = Message::Text(subscribe_msg.to_string());
     ws_stream.send(message).await?;
 
+    let mut err_count = 0;
+
     while let Some(msg) = ws_stream.next().await {
         let msg = msg?;
 
@@ -88,11 +107,16 @@ pub async fn bitstamp_data_listen(
 
         let parsed: BitstampData =
             serde_json::from_str(&msg_str).expect("Can't parse bitstamp data");
-        // TODO: Do something with the data
-        // println!("Got bitstamp message: {:#?}", parsed);
 
         if parsed.data.timestamp.is_some() {
-            send_bitstamp_data(parsed, &chan_send).await?;
+            if let Err(_) = send_bitstamp_data(parsed, &chan_send).await {
+                err_count += 1;
+            }
+        }
+
+        if err_count > ERR_COUNT_LOG {
+            log::error!("Failed to send 50 bitstamp orderbooks. No receivers found.");
+            err_count = 0;
         }
     }
 
@@ -105,7 +129,7 @@ pub async fn bitstamp_data_listen(
     let message = Message::Text(unsubscribe_msg.to_string());
     ws_stream.send(message).await?;
 
-    // TODO: Make it more dynamic since this is unreachable code at the moment
+    // Unreachable code but we like to do the right thing and close the stream eventually :)
     ws_stream.close(None).await?;
 
     Ok(())
@@ -123,9 +147,7 @@ async fn send_bitstamp_data(
         }),
     };
 
-    if let Err(error) = chan_send.try_send(message) {
-        log::error!("Failed trying to send Bitstamp message: {:?}", error);
-    }
+    chan_send.send(message)?;
 
     Ok(())
 }
