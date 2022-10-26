@@ -12,7 +12,10 @@ use crate::models::{
     mapper::{BinanceStreamData, BitstampData},
 };
 
-use super::messages::{BidsAsks, OrderbookMessage};
+use super::{
+    mapper::Exchange,
+    messages::{OrderbookMessage, Orders},
+};
 
 /// Binance streamer
 /// 1. Connects to the Binance Web Socket which already contains the orderbook that we want to subscribe to
@@ -56,13 +59,14 @@ pub async fn binance_data_listen(
     Ok(())
 }
 
-/// Helper to send binance data to mpsc channel
+/// Helper to send binance data to broadcast channel
 async fn send_binance_data(
     data: BinanceStreamData,
     chan_send: &Sender<OrderbookMessage>,
 ) -> Result<()> {
-    let message = OrderbookMessage::BinanceMessage {
-        message: Box::new(BidsAsks {
+    let message = OrderbookMessage::Message {
+        message: Box::new(Orders {
+            exchange: Exchange::Binance,
             asks: data.asks,
             bids: data.bids,
         }),
@@ -140,8 +144,9 @@ async fn send_bitstamp_data(
     data: BitstampData,
     chan_send: &Sender<OrderbookMessage>,
 ) -> Result<()> {
-    let message = OrderbookMessage::BitstampMessage {
-        message: Box::new(BidsAsks {
+    let message = OrderbookMessage::Message {
+        message: Box::new(Orders {
+            exchange: Exchange::Bitstamp,
             asks: data.data.asks.unwrap(),
             bids: data.data.bids.unwrap(),
         }),

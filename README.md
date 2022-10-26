@@ -18,7 +18,7 @@ apt install protobuf-compiler
 - Rust version used: 1.63.0
 
 ## Running the server
-Please make sure you have all the above requirements installed
+Please make sure you have all the above requirements installed. The step-by-step below uses `ethbtc` as the example market. If you'd like to run with any other currency pair just replace `ethbtc` with your choice.
 
 ### 1. Clone the repo and `cd` into it
 ```bash
@@ -34,12 +34,12 @@ The above will create a gRPC server that will listen for "ethbtc" market from bo
 ---
 If you want to see warning logs run the following instead:
 ```bash
-RUST_LOG=warn cargo run -- server -s ethbtc
+RUST_LOG=info cargo run -- server -s ethbtc
 ```
 
 ### 3. [Optional] In the other terminal run:
 ```bash
-cargo run -- client
+RUST_LOG=info cargo run -- client
 ```
 The nice thing about this implementation is that we can have n numbers of clients listening to the same server since we're using multi-producer, multi-consumer broadcast queue.
 

@@ -1,5 +1,7 @@
+use enum_display_derive::Display;
 use serde::de;
 use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt::Display;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OfferData {
@@ -9,6 +11,12 @@ pub struct OfferData {
     /// Quantity
     #[serde(deserialize_with = "de_float_from_str")]
     pub quantity: f32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Display)]
+pub enum Exchange {
+    Binance,
+    Bitstamp,
 }
 
 #[derive(Debug, Deserialize)]

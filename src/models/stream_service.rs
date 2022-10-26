@@ -47,29 +47,21 @@ impl StreamService {
         }
     }
 
+    /// Spawns two threads that will be listening for orders in 2 different exchanges:
+    /// - Binance
+    /// - Bitstamp
+    /// Additionaly they'll be sending orderbooks through a multi-producer, multi-consumer
+    /// broadcast queue so that we can combine and order the data.
     pub async fn run(self) -> Result<Sender<OrderbookMessage>> {
-        let mut tasks = vec![];
-
         let cloned_symbol = self.symbol.clone();
         let chan_send_cloned = self.chan_send.clone();
 
-        tasks.push(tokio::spawn(async move {
-            binance_data_listen(cloned_symbol, chan_send_cloned).await
-        }));
+        tokio::spawn(async move { binance_data_listen(cloned_symbol, chan_send_cloned).await });
 
         // We need to clone them again as the above ones got moved
         let cloned_symbol = self.symbol.clone();
         let chan_send_cloned = self.chan_send.clone();
-        tasks.push(tokio::spawn(async move {
-            bitstamp_data_listen(cloned_symbol, chan_send_cloned).await
-        }));
-
-        // TODO: Should we wait for tasks somewhere?
-        // // Wait for all
-        // let results = futures::future::join_all(tasks).await;
-        // for res in results {
-        //     res??;
-        // }
+        tokio::spawn(async move { bitstamp_data_listen(cloned_symbol, chan_send_cloned).await });
 
         Ok(self.chan_send)
     }
@@ -100,28 +92,22 @@ impl StreamService {
     }
 
     async fn handle_message(msg: &OrderbookMessage) -> Result<Summary, OrderbookError> {
-        let (asks, bids) = match msg {
-            OrderbookMessage::BinanceMessage { message } => {
+        let (asks, bids, exchange) = match msg {
+            OrderbookMessage::Message { message } => {
                 let asklen = message.asks.len();
                 let bidlen = message.bids.len();
                 log::warn!(
-                    "Received message for Binance with {} asks and {} bids",
+                    "Received message for {:?} with {} asks and {} bids",
+                    message.exchange,
                     asklen,
                     bidlen
                 );
 
-                (message.asks.clone(), message.bids.clone())
-            }
-            OrderbookMessage::BitstampMessage { message } => {
-                let asklen = message.asks.len();
-                let bidlen = message.bids.len();
-                log::warn!(
-                    "Received message for Bitstamp with {} asks and {} bids",
-                    asklen,
-                    bidlen
-                );
-
-                (message.asks.clone(), message.bids.clone())
+                (
+                    message.asks.clone(),
+                    message.bids.clone(),
+                    message.exchange.clone(),
+                )
             }
         };
 
@@ -130,7 +116,7 @@ impl StreamService {
             .into_iter()
             .map(|ask| Level {
                 amount: ask.quantity as f64,
-                exchange: "".to_owned(),
+                exchange: exchange.to_string(),
                 price: ask.price as f64,
             })
             .collect();
@@ -139,7 +125,7 @@ impl StreamService {
             .into_iter()
             .map(|bid| Level {
                 amount: bid.quantity as f64,
-                exchange: "".to_owned(),
+                exchange: exchange.to_string(),
                 price: bid.price as f64,
             })
             .collect();
