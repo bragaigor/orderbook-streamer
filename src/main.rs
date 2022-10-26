@@ -23,7 +23,7 @@ enum SubCommand {
 
 #[derive(Parser)]
 pub(crate) struct ServerArgs {
-    /// Symbol to which we'll stream
+    /// Symbol (currency pair) to which we'll stream
     #[clap(short = 's')]
     symbol: Option<String>,
 }
@@ -50,13 +50,9 @@ async fn main() -> Result<()> {
                 .expect("Failed to run gRPC server");
         }
         SubCommand::Client(_args) => {
-            // TODO: Call gRPC client. Mostly used to test
             grpc_client::listen().await?;
         }
     }
-
-    // TODO: Cache incoming data from stream and sort them on the go.
-    //       - Use Max Heap for performance
 
     Ok(())
 }

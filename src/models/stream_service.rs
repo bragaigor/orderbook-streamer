@@ -23,7 +23,7 @@ pub struct StreamService {
     /// Private sender that sends message to channel
     chan_send: Sender<OrderbookMessage>,
     /// Private reciever that gets the messages sent by send
-    chan_recv: Receiver<OrderbookMessage>,
+    chan_recv: Receiver<OrderbookMessage>, // TODO: Fix this!
 }
 
 impl StreamService {
