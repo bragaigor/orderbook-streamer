@@ -43,12 +43,15 @@ pub async fn binance_data_listen(
         let parsed: BinanceStreamData =
             serde_json::from_str(&msg_str).expect("Can't parse binance data");
 
-        if let Err(_) = send_binance_data(parsed, &chan_send).await {
+        if send_binance_data(parsed, &chan_send).await.is_err() {
             err_count += 1;
         }
 
         if err_count > ERR_COUNT_LOG {
-            log::error!("Failed to send 50 binance orderbooks. No receivers found.");
+            log::warn!(
+                "Failed to send {} binance orderbooks. No receivers found.",
+                ERR_COUNT_LOG
+            );
             err_count = 0;
         }
     }
@@ -112,14 +115,16 @@ pub async fn bitstamp_data_listen(
         let parsed: BitstampData =
             serde_json::from_str(&msg_str).expect("Can't parse bitstamp data");
 
-        if parsed.data.timestamp.is_some() {
-            if let Err(_) = send_bitstamp_data(parsed, &chan_send).await {
-                err_count += 1;
-            }
+        if parsed.data.timestamp.is_some() && send_bitstamp_data(parsed, &chan_send).await.is_err()
+        {
+            err_count += 1;
         }
 
         if err_count > ERR_COUNT_LOG {
-            log::error!("Failed to send 50 bitstamp orderbooks. No receivers found.");
+            log::warn!(
+                "Failed to send {} bitstamp orderbooks. No receivers found.",
+                ERR_COUNT_LOG
+            );
             err_count = 0;
         }
     }

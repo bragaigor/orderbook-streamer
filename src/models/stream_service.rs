@@ -10,6 +10,7 @@ use crate::server::grpc_server::{self, ResultSummary};
 use super::{
     consts::CHANNEL_BUFFER_LIMIT,
     errors::OrderbookError,
+    mapper::{Exchange, OfferData},
     messages::OrderbookMessage,
     stream::{binance_data_listen, bitstamp_data_listen},
 };
@@ -23,7 +24,7 @@ pub struct StreamService {
     /// Private sender that sends message to channel
     chan_send: Sender<OrderbookMessage>,
     /// Private reciever that gets the messages sent by send
-    chan_recv: Receiver<OrderbookMessage>, // TODO: Fix this!
+    _chan_recv: Receiver<OrderbookMessage>,
 }
 
 impl StreamService {
@@ -43,7 +44,7 @@ impl StreamService {
         StreamService {
             symbol,
             chan_send,
-            chan_recv,
+            _chan_recv: chan_recv,
         }
     }
 
@@ -67,26 +68,29 @@ impl StreamService {
     }
 
     /// Receiver loop. Always listens and waits for messages and call handle_message to process messages accordingly
-    pub async fn mpsc_handle(
+    pub async fn broadcast_handle(
+        client_id: String,
         mut chan_recv: Receiver<OrderbookMessage>,
         chan_send: mpsc::Sender<ResultSummary>,
     ) -> Result<()> {
-        // let mut recv = chan_recv.lock().await;
-        // Wait for messages and then process them
+        log::info!(
+            "Stream Server ready to stream. Connected to client: {}",
+            &client_id
+        );
 
-        loop {
-            if let Ok(msg) = chan_recv.recv().await {
-                let summary = StreamService::handle_message(&msg).await?;
+        while let Ok(msg) = chan_recv.recv().await {
+            let summary = StreamService::handle_message(&msg).await?;
 
-                // TODO: Merge and sort asks and bids. Should we use an internal cache or should we sort each order book as they come?
-                chan_send.send(Ok(summary)).await.unwrap();
-            } else {
-                // Break out of the loop once all clients are destroyed
+            if let Err(error) = chan_send.send(Ok(summary)).await {
+                log::debug!(
+                    "Failed to send broadcast message. No clients available. Error: {:?}",
+                    error
+                );
                 break;
             }
         }
 
-        log::info!("Strem Service is now shutdown");
+        log::info!("Stream Server closed connection to client: {}", &client_id);
 
         Ok(())
     }
@@ -96,44 +100,44 @@ impl StreamService {
             OrderbookMessage::Message { message } => {
                 let asklen = message.asks.len();
                 let bidlen = message.bids.len();
-                log::warn!(
+                log::debug!(
                     "Received message for {:?} with {} asks and {} bids",
                     message.exchange,
                     asklen,
                     bidlen
                 );
 
-                (
-                    message.asks.clone(),
-                    message.bids.clone(),
-                    message.exchange.clone(),
-                )
+                let mut asks = message.asks.clone();
+                let mut bids = message.bids.clone();
+
+                asks.sort_by(|order_l, order_r| order_l.price.partial_cmp(&order_r.price).unwrap());
+                bids.sort_by(|order_l, order_r| order_r.price.partial_cmp(&order_l.price).unwrap());
+
+                (asks, bids, message.exchange)
             }
         };
 
-        // TODO: Clean this for sorting
-        let askss = asks
-            .into_iter()
-            .map(|ask| Level {
-                amount: ask.quantity as f64,
-                exchange: exchange.to_string(),
-                price: ask.price as f64,
-            })
-            .collect();
+        let converted_asks = StreamService::convert_to_levels(asks, &exchange);
+        let converted_bids = StreamService::convert_to_levels(bids, &exchange);
+        let spread = converted_asks[0].price - converted_bids[0].price;
 
-        let bidss = bids
+        Ok(Summary {
+            spread,
+            bids: converted_bids,
+            asks: converted_asks,
+        })
+    }
+
+    /// Helper to convert asks and prices to Level Struct to be sent via gRPC
+    fn convert_to_levels(securities: Vec<OfferData>, exchange: &Exchange) -> Vec<Level> {
+        securities
             .into_iter()
+            .take(10)
             .map(|bid| Level {
                 amount: bid.quantity as f64,
                 exchange: exchange.to_string(),
                 price: bid.price as f64,
             })
-            .collect();
-
-        Ok(Summary {
-            spread: 10 as f64,
-            bids: bidss,
-            asks: askss,
-        })
+            .collect()
     }
 }

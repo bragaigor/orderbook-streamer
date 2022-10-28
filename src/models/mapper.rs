@@ -13,7 +13,7 @@ pub struct OfferData {
     pub quantity: f32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Display)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Display)]
 pub enum Exchange {
     Binance,
     Bitstamp,

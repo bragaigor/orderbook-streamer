@@ -1,3 +1,5 @@
+use std::thread;
+
 use orderbook::orderbook_aggregator_server::{OrderbookAggregator, OrderbookAggregatorServer};
 use orderbook::{Empty, Summary};
 use tokio::sync::broadcast::Sender;
@@ -5,6 +7,7 @@ use tokio::sync::mpsc::channel;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status};
 
+use crate::models::consts::{IP_ADDRESS, SERVER_PORT};
 use crate::models::messages::OrderbookMessage;
 use crate::models::stream_service::StreamService;
 
@@ -28,12 +31,19 @@ impl OrderbookAggregator for OrderbookService {
         _empty: Request<Empty>,
     ) -> Result<Response<Self::BookSummaryStream>, Status> {
         // TODO: Make the channel buffer limit here dynamic and larger
-        let (tx, rx) = channel(4);
+        let (tx, rx) = channel(100);
+
+        let machine_name = &uname::uname()?.nodename;
+        let id = thread::current().id();
+        let client_id = format!("{}:tid:{:?}", machine_name, id);
+        log::info!("Starting client with id: {}", &client_id);
 
         // The nice thing about this implementation is that we can have n numbers of clients listening to
         // the same server since we're using multi-producer, multi-consumer broadcast queue
         let chan_recv = self.chan_send.subscribe();
-        tokio::spawn(async move { StreamService::mpsc_handle(chan_recv, tx.clone()).await });
+        tokio::spawn(async move {
+            StreamService::broadcast_handle(client_id, chan_recv, tx.clone()).await
+        });
 
         Ok(Response::new(ReceiverStream::new(rx)))
     }
@@ -44,7 +54,7 @@ pub async fn serve(symbol: Option<String>) -> Result<(), Box<dyn std::error::Err
     let chan_send = service.run().await?;
 
     // Defining address for our service.
-    let addr = "[::1]:8080".parse().unwrap();
+    let addr = format!("{}:{}", IP_ADDRESS, SERVER_PORT).parse().unwrap();
     // Create an orderbook service instance.
     let orderbook = OrderbookService { chan_send };
 

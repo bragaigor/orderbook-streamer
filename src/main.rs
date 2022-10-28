@@ -33,13 +33,7 @@ pub(crate) struct ClientArgs {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    stackdriver_logger::init_with(
-        Some(stackdriver_logger::Service {
-            name: "OrderbookStream".to_owned(),
-            version: "1.0".to_owned(),
-        }),
-        true,
-    );
+    pretty_env_logger::init_timed();
 
     let opts: Opts = Opts::parse();
 
