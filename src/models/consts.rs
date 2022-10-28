@@ -13,4 +13,4 @@ pub const UPDATE_SPEED_BINANCE: &str = "100ms";
 /// Port at which our gRPC Server will be running
 pub const SERVER_PORT: &str = "50505";
 /// IP Address at which our gRPC Server will be running
-pub const IP_ADDRESS: &str = "50505";
+pub const IP_ADDRESS: &str = "[::1]";
