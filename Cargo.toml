@@ -23,6 +23,7 @@ clap = { version = "4.0.18", features = ["derive"] }
 prost = "0.11.0"
 tonic = "0.8.2"
 uname = "0.1.1"
+approx = "0.5.0"
 protoc = "2.28.0"
 pretty_env_logger = "0.4.0"
 enum-display-derive = "0.1.1"

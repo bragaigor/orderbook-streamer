@@ -14,3 +14,5 @@ pub const UPDATE_SPEED_BINANCE: &str = "100ms";
 pub const SERVER_PORT: &str = "50505";
 /// IP Address at which our gRPC Server will be running
 pub const IP_ADDRESS: &str = "[::1]";
+/// Limit of asks and bids we're returning to the user
+pub const MAX_PAIR_EXCHANGE: usize = 10;

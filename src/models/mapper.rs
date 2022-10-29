@@ -41,7 +41,7 @@ pub struct BitstampOfferData {
     /// Price level to be updated
     #[serde(deserialize_with = "de_float_from_str")]
     pub price: f32,
-    /// Quantity
+    /// Quantity of transaction
     #[serde(deserialize_with = "de_float_from_str")]
     pub quantity: f32,
 }
@@ -110,7 +110,7 @@ impl fmt::Debug for LevelOutput {
 }
 
 impl From<Level> for LevelOutput {
-    /// Convert from a bucket set to a WSBucket for easy database insertion
+    /// Convert from a Level to LevelOutput for pretty print
     fn from(level: Level) -> Self {
         LevelOutput {
             exchange: level.exchange,
@@ -138,19 +138,10 @@ impl fmt::Debug for SummaryOutput {
 }
 
 impl From<Summary> for SummaryOutput {
-    /// Convert from a bucket set to a WSBucket for easy database insertion
+    /// Convert from a Summary to SummaryOutput for pretty print
     fn from(summary: Summary) -> Self {
-        let asks = summary
-            .asks
-            .into_iter()
-            .map(|ask| LevelOutput::from(ask))
-            .collect();
-
-        let bids = summary
-            .bids
-            .into_iter()
-            .map(|bid| LevelOutput::from(bid))
-            .collect();
+        let asks = summary.asks.into_iter().map(LevelOutput::from).collect();
+        let bids = summary.bids.into_iter().map(LevelOutput::from).collect();
 
         SummaryOutput {
             spread: summary.spread,

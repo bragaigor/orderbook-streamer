@@ -8,7 +8,7 @@ use tokio::sync::{
 use crate::server::grpc_server::{self, ResultSummary};
 
 use super::{
-    consts::CHANNEL_BUFFER_LIMIT,
+    consts::{CHANNEL_BUFFER_LIMIT, MAX_PAIR_EXCHANGE},
     errors::OrderbookError,
     mapper::{Exchange, OfferData},
     messages::OrderbookMessage,
@@ -79,7 +79,7 @@ impl StreamService {
         );
 
         while let Ok(msg) = chan_recv.recv().await {
-            let summary = StreamService::handle_message(&msg).await?;
+            let summary = StreamService::handle_message(&msg)?;
 
             if let Err(error) = chan_send.send(Ok(summary)).await {
                 log::debug!(
@@ -95,8 +95,8 @@ impl StreamService {
         Ok(())
     }
 
-    async fn handle_message(msg: &OrderbookMessage) -> Result<Summary, OrderbookError> {
-        let (asks, bids, exchange) = match msg {
+    pub(crate) fn handle_message(msg: &OrderbookMessage) -> Result<Summary, OrderbookError> {
+        let (mut asks, mut bids, exchange) = match msg {
             OrderbookMessage::Message { message } => {
                 let asklen = message.asks.len();
                 let bidlen = message.bids.len();
@@ -107,18 +107,13 @@ impl StreamService {
                     bidlen
                 );
 
-                let mut asks = message.asks.clone();
-                let mut bids = message.bids.clone();
-
-                asks.sort_by(|order_l, order_r| order_l.price.partial_cmp(&order_r.price).unwrap());
-                bids.sort_by(|order_l, order_r| order_r.price.partial_cmp(&order_l.price).unwrap());
-
-                (asks, bids, message.exchange)
+                (message.asks.clone(), message.bids.clone(), message.exchange)
             }
         };
 
-        let converted_asks = StreamService::convert_to_levels(asks, &exchange);
-        let converted_bids = StreamService::convert_to_levels(bids, &exchange);
+        let (converted_asks, converted_bids) =
+            StreamService::sort_and_convert(&mut asks, &mut bids, &exchange);
+
         let spread = converted_asks[0].price - converted_bids[0].price;
 
         Ok(Summary {
@@ -128,11 +123,26 @@ impl StreamService {
         })
     }
 
+    /// Helper to sort the asks based on price and convert them to a Vec of Levels to be send to a client
+    pub(crate) fn sort_and_convert(
+        asks: &mut [OfferData],
+        bids: &mut [OfferData],
+        exchange: &Exchange,
+    ) -> (Vec<Level>, Vec<Level>) {
+        asks.sort_by(|order_l, order_r| order_l.price.partial_cmp(&order_r.price).unwrap());
+        bids.sort_by(|order_l, order_r| order_r.price.partial_cmp(&order_l.price).unwrap());
+
+        let converted_asks = StreamService::convert_to_levels(asks, exchange);
+        let converted_bids = StreamService::convert_to_levels(bids, exchange);
+
+        (converted_asks, converted_bids)
+    }
+
     /// Helper to convert asks and prices to Level Struct to be sent via gRPC
-    fn convert_to_levels(securities: Vec<OfferData>, exchange: &Exchange) -> Vec<Level> {
+    fn convert_to_levels(securities: &mut [OfferData], exchange: &Exchange) -> Vec<Level> {
         securities
-            .into_iter()
-            .take(10)
+            .iter_mut()
+            .take(MAX_PAIR_EXCHANGE)
             .map(|bid| Level {
                 amount: bid.quantity as f64,
                 exchange: exchange.to_string(),
