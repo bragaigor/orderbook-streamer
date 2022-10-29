@@ -19,7 +19,9 @@ pub async fn listen() -> Result<()> {
     let mut stream = client.book_summary(empty).await?.into_inner();
 
     while let Some(summary) = stream.message().await? {
-        log::info!("CLIENT: message from server = {:?}", summary);
+        // Uncomment me to beautify output. Note: it does add some latency to the client, which is why it's commented by default
+        // let summary = SummaryOutput::from(summary);
+        log::info!("\n{:#?}", summary);
     }
 
     Ok(())

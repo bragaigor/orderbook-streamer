@@ -16,7 +16,7 @@ enum SubCommand {
     #[clap(version = "1.0", author = "Igor Braga <higorb1@gmail.com>")]
     Server(ServerArgs),
 
-    /// gRPC Client
+    /// gRPC Client. Listens for gRPC streaming Server sending sorted orderbooks
     #[clap(version = "1.0", author = "Igor Braga <higorb1@gmail.com>")]
     Client(ClientArgs),
 }

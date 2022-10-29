@@ -40,8 +40,17 @@ pub async fn binance_data_listen(
 
         let msg_str = msg.into_text()?;
 
-        let parsed: BinanceStreamData =
-            serde_json::from_str(&msg_str).expect("Can't parse binance data");
+        let parsed: BinanceStreamData = match serde_json::from_str(&msg_str) {
+            Ok(val) => val,
+            Err(error) => {
+                log::warn!(
+                    "Can't parse Binance data, dropping message. Error: {:?}. String: {}",
+                    error,
+                    &msg_str
+                );
+                continue;
+            }
+        };
 
         if send_binance_data(parsed, &chan_send).await.is_err() {
             err_count += 1;
@@ -49,7 +58,7 @@ pub async fn binance_data_listen(
 
         if err_count > ERR_COUNT_LOG {
             log::warn!(
-                "Failed to send {} binance orderbooks. No receivers found.",
+                "Failed to send {} binance orderbooks. No clients connected.",
                 ERR_COUNT_LOG
             );
             err_count = 0;
@@ -112,8 +121,17 @@ pub async fn bitstamp_data_listen(
 
         let msg_str = msg.into_text()?;
 
-        let parsed: BitstampData =
-            serde_json::from_str(&msg_str).expect("Can't parse bitstamp data");
+        let parsed: BitstampData = match serde_json::from_str(&msg_str) {
+            Ok(val) => val,
+            Err(error) => {
+                log::warn!(
+                    "Can't parse bitstamp data, dropping message. Error: {:?}. String: {}",
+                    error,
+                    &msg_str
+                );
+                continue;
+            }
+        };
 
         if parsed.data.timestamp.is_some() && send_bitstamp_data(parsed, &chan_send).await.is_err()
         {
@@ -122,7 +140,7 @@ pub async fn bitstamp_data_listen(
 
         if err_count > ERR_COUNT_LOG {
             log::warn!(
-                "Failed to send {} bitstamp orderbooks. No receivers found.",
+                "Failed to send {} bitstamp orderbooks. No clients connected.",
                 ERR_COUNT_LOG
             );
             err_count = 0;

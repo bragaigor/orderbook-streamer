@@ -1,7 +1,14 @@
 use enum_display_derive::Display;
 use serde::de;
 use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt;
 use std::fmt::Display;
+
+use crate::client::grpc_client::orderbook::{Level, Summary};
+
+pub mod orderbook {
+    tonic::include_proto!("orderbook");
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OfferData {
@@ -81,4 +88,74 @@ where
     let str_val = String::deserialize(deserializer)?;
     let num = str_val.parse::<usize>().map_err(de::Error::custom)?;
     Ok(Some(num))
+}
+
+// These are structs used to beautify Client's output
+
+/// Equivalent of Level struct but used to output data
+pub struct LevelOutput {
+    exchange: String,
+    price: f64,
+    amount: f64,
+}
+
+impl fmt::Debug for LevelOutput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "\t\texchange: \"{}\", price: {}, amount: {}",
+            self.exchange, self.price, self.amount
+        )
+    }
+}
+
+impl From<Level> for LevelOutput {
+    /// Convert from a bucket set to a WSBucket for easy database insertion
+    fn from(level: Level) -> Self {
+        LevelOutput {
+            exchange: level.exchange,
+            price: level.price,
+            amount: level.amount,
+        }
+    }
+}
+
+/// Equivalent of Summary struct but used to output data
+pub struct SummaryOutput {
+    pub spread: f64,
+    pub asks: Vec<LevelOutput>,
+    pub bids: Vec<LevelOutput>,
+}
+
+impl fmt::Debug for SummaryOutput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{{\n\tspread: \"{}\",\n\tasks: {:#?},\n\tbids: {:#?}\n}}",
+            self.spread, self.asks, self.bids
+        )
+    }
+}
+
+impl From<Summary> for SummaryOutput {
+    /// Convert from a bucket set to a WSBucket for easy database insertion
+    fn from(summary: Summary) -> Self {
+        let asks = summary
+            .asks
+            .into_iter()
+            .map(|ask| LevelOutput::from(ask))
+            .collect();
+
+        let bids = summary
+            .bids
+            .into_iter()
+            .map(|bid| LevelOutput::from(bid))
+            .collect();
+
+        SummaryOutput {
+            spread: summary.spread,
+            asks,
+            bids,
+        }
+    }
 }
