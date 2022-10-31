@@ -2,9 +2,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum OrderbookError {
-    #[error("missing domain cache for domain {on_domain:?}")]
-    DomainCacheLookup { on_domain: String },
+    // TODO: Future version, add Custom Error handling
 
     #[error(transparent)]
-    Other(#[from] anyhow::Error), // source and Display delegate to anyhow::Error
+    Other(#[from] anyhow::Error),
 }
