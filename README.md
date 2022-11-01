@@ -22,8 +22,8 @@ Please make sure you have all the above requirements installed. The step-by-step
 
 ### 1. Clone the repo and `cd` into it
 ```bash
-git clone https://github.com/bragaigor/crypto-streamer.git
-cd crypto-streamer/
+git clone https://github.com/bragaigor/orderbook-streamer.git
+cd orderbook-streamer/
 ```
 
 ### 2. Make sure you have 2 or 3 different terminal opened. In one of them run:
